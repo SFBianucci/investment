@@ -7,7 +7,9 @@ import yahooFinance from 'yahoo-finance2'
 import { cache } from './cache.js'
 import { calcRSI, calcMACD, calcBollinger, calcSMACross, calcATR, calcVolatility, computeSignalScore } from './indicators.js'
 
-yahooFinance.setGlobalConfig({ validation: { logErrors: false } })
+if (typeof yahooFinance?.setGlobalConfig === 'function') {
+  yahooFinance.setGlobalConfig({ validation: { logErrors: false } })
+}
 
 /**
  * Analiza un ticker completo: técnico + fundamental + señal.
