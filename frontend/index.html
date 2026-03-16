@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Portfolio Tracker</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #f7f7f5;
+      --surface: #ffffff;
+      --surface2: #f1f0ec;
+      --border: rgba(0,0,0,0.09);
+      --border2: rgba(0,0,0,0.15);
+      --text: #1a1a18;
+      --text2: #6b6b67;
+      --text3: #9b9b96;
+      --green: #2d7a4f;
+      --green-bg: #e8f5ee;
+      --red: #a32d2d;
+      --red-bg: #fceaea;
+      --amber: #7a4f0d;
+      --amber-bg: #fef3dc;
+      --blue: #1a4fa0;
+      --blue-bg: #e8effe;
+      --radius: 10px;
+      --radius-sm: 6px;
+    }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); font-size: 14px; line-height: 1.5; min-height: 100vh; }
+
+    /* ── Layout ── */
+    .app { max-width: 1280px; margin: 0 auto; padding: 24px 20px; }
+    .topbar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 24px; }
+    .topbar h1 { font-size: 22px; font-weight: 600; letter-spacing: -0.3px; }
+    .topbar-right { display: flex; align-items: center; gap: 10px; }
+    .fx-strip { display: flex; gap: 8px; flex-wrap: wrap; }
+    .fx-pill { font-size: 11px; padding: 4px 10px; background: var(--surface); border: 0.5px solid var(--border2); border-radius: 100px; color: var(--text2); }
+    .fx-pill b { color: var(--text); }
+    .btn-refresh { padding: 7px 14px; border-radius: var(--radius-sm); border: 0.5px solid var(--border2); background: var(--surface); cursor: pointer; font-size: 12px; color: var(--text2); transition: background 0.15s; }
+    .btn-refresh:hover { background: var(--surface2); }
+
+    /* ── Metrics ── */
+    .metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 24px; }
+    .metric { background: var(--surface); border: 0.5px solid var(--border); border-radius: var(--radius); padding: 14px 16px; }
+    .metric-label { font-size: 11px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 5px; }
+    .metric-value { font-size: 21px; font-weight: 600; letter-spacing: -0.5px; }
+    .metric-sub { font-size: 12px; color: var(--text3); margin-top: 3px; }
+
+    /* ── Charts row ── */
+    .charts-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 24px; }
+    @media (max-width: 900px) { .charts-row { grid-template-columns: 1fr 1fr; } }
+    @media (max-width: 600px) { .charts-row { grid-template-columns: 1fr; } }
+    .chart-card { background: var(--surface); border: 0.5px solid var(--border); border-radius: var(--radius); padding: 16px; }
+    .chart-card-title { font-size: 12px; color: var(--text2); font-weight: 500; margin-bottom: 12px; }
+
+    /* ── Tabs ── */
+    .tabs { display: flex; gap: 4px; margin-bottom: 16px; flex-wrap: wrap; }
+    .tab { padding: 7px 16px; font-size: 13px; border-radius: var(--radius-sm); border: 0.5px solid var(--border2); background: transparent; cursor: pointer; color: var(--text2); font-family: inherit; transition: all 0.15s; }
+    .tab.active { background: var(--text); color: #fff; border-color: var(--text); }
+    .tab:hover:not(.active) { background: var(--surface2); color: var(--text); }
+
+    /* ── Table ── */
+    .table-card { background: var(--surface); border: 0.5px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th { text-align: left; font-size: 10px; font-weight: 600; color: var(--text3); padding: 10px 14px; border-bottom: 0.5px solid var(--border); text-transform: uppercase; letter-spacing: 0.06em; white-space: nowrap; background: var(--surface2); }
+    td { padding: 11px 14px; border-bottom: 0.5px solid var(--border); color: var(--text); vertical-align: middle; }
+    tr:last-child td { border-bottom: none; }
+    tbody tr:hover td { background: var(--surface2); }
+
+    .ticker-cell .t { font-weight: 600; font-size: 13px; }
+    .ticker-cell .n { font-size: 11px; color: var(--text3); margin-top: 1px; }
+
+    .badge { display: inline-block; font-size: 10px; padding: 2px 8px; border-radius: 100px; border: 0.5px solid var(--border2); color: var(--text2); white-space: nowrap; }
+
+    .signal { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: 100px; white-space: nowrap; }
+    .sig-compra_fuerte { background: #1D9E75; color: #fff; }
+    .sig-comprar       { background: var(--green-bg); color: var(--green); }
+    .sig-mantener      { background: var(--amber-bg); color: var(--amber); }
+    .sig-reducir       { background: #fde8e8; color: #8a2020; }
+    .sig-vender        { background: var(--red-bg); color: var(--red); }
+    .sig-default       { background: var(--surface2); color: var(--text2); }
+
+    .score-wrap { display: flex; align-items: center; gap: 6px; }
+    .score-bar { width: 52px; height: 5px; border-radius: 3px; background: var(--border); position: relative; flex-shrink: 0; }
+    .score-fill { height: 100%; border-radius: 3px; position: absolute; left: 0; top: 0; transition: width 0.4s; }
+    .score-num { font-size: 11px; color: var(--text2); min-width: 22px; }
+
+    .pnl-pos { color: var(--green); font-weight: 500; }
+    .pnl-neg { color: var(--red); font-weight: 500; }
+
+    /* ── SP500 panel ── */
+    .sp500-header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin-bottom: 16px; margin-top: 28px; }
+    .sp500-header h2 { font-size: 16px; font-weight: 600; }
+    .sp500-filters { display: flex; gap: 6px; flex-wrap: wrap; }
+    .sp500-search { padding: 7px 12px; border-radius: var(--radius-sm); border: 0.5px solid var(--border2); background: var(--surface); font-size: 13px; font-family: inherit; color: var(--text); width: 200px; outline: none; }
+    .sp500-search:focus { border-color: var(--text2); }
+    .sector-select { padding: 7px 12px; border-radius: var(--radius-sm); border: 0.5px solid var(--border2); background: var(--surface); font-size: 13px; font-family: inherit; color: var(--text); cursor: pointer; outline: none; }
+
+    /* ── Loading / error ── */
+    .loading { text-align: center; padding: 40px; color: var(--text3); font-size: 13px; }
+    .error-msg { background: var(--red-bg); color: var(--red); padding: 12px 16px; border-radius: var(--radius-sm); font-size: 13px; margin-bottom: 16px; }
+
+    /* ── Hidden ── */
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+<div class="app">
+
+  <!-- Top bar -->
+  <div class="topbar">
+    <div>
+      <h1>Portfolio Tracker</h1>
+      <div id="updated-at" style="font-size:11px;color:var(--text3);margin-top:2px;">Cargando datos...</div>
+    </div>
+    <div class="topbar-right">
+      <div class="fx-strip" id="fx-strip">
+        <span class="fx-pill">Cargando FX...</span>
+      </div>
+      <button class="btn-refresh" onclick="loadAll()">↺ Actualizar</button>
+    </div>
+  </div>
+
+  <div id="error-box" class="error-msg hidden"></div>
+
+  <!-- Metrics -->
+  <div class="metrics">
+    <div class="metric">
+      <div class="metric-label">Valor total</div>
+      <div class="metric-value" id="m-total">—</div>
+      <div class="metric-sub" id="m-total-sub"></div>
+    </div>
+    <div class="metric">
+      <div class="metric-label">CEDEARs</div>
+      <div class="metric-value" id="m-cedears">—</div>
+      <div class="metric-sub" id="m-cedears-pct"></div>
+    </div>
+    <div class="metric">
+      <div class="metric-label">Bonos</div>
+      <div class="metric-value" id="m-bonos">—</div>
+      <div class="metric-sub" id="m-bonos-pct"></div>
+    </div>
+    <div class="metric">
+      <div class="metric-label">Acciones ARG</div>
+      <div class="metric-value" id="m-acc">—</div>
+      <div class="metric-sub" id="m-acc-pct"></div>
+    </div>
+    <div class="metric">
+      <div class="metric-label">Señales compra</div>
+      <div class="metric-value" id="m-buys" style="color:var(--green)">—</div>
+      <div class="metric-sub" id="m-buys-sub"></div>
+    </div>
+  </div>
+
+  <!-- Charts -->
+  <div class="charts-row">
+    <div class="chart-card">
+      <div class="chart-card-title">Distribución por tipo</div>
+      <div style="position:relative;height:180px;"><canvas id="chart-dist"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-card-title">Scores de señal — portfolio</div>
+      <div style="position:relative;height:180px;"><canvas id="chart-scores"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-card-title">CEDEARs por sector</div>
+      <div style="position:relative;height:180px;"><canvas id="chart-sectors"></canvas></div>
+    </div>
+  </div>
+
+  <!-- Portfolio tabs -->
+  <div class="tabs">
+    <button class="tab active" onclick="showTab('cedears',this)">CEDEARs</button>
+    <button class="tab" onclick="showTab('bonos',this)">Bonos</button>
+    <button class="tab" onclick="showTab('acciones',this)">Acciones ARG</button>
+    <button class="tab" onclick="showTab('on',this)">ON</button>
+  </div>
+
+  <div class="table-card">
+    <div class="table-wrap">
+      <div id="tab-cedears"><div class="loading">Cargando CEDEARs...</div></div>
+      <div id="tab-bonos" class="hidden"><div class="loading">Cargando bonos...</div></div>
+      <div id="tab-acciones" class="hidden"><div class="loading">Cargando acciones...</div></div>
+      <div id="tab-on" class="hidden"><div class="loading">Cargando ON...</div></div>
+    </div>
+  </div>
+
+  <!-- S&P 500 -->
+  <div class="sp500-header">
+    <h2>S&amp;P 500 — Monitor general</h2>
+    <div class="sp500-filters">
+      <input class="sp500-search" type="text" id="sp500-search" placeholder="Buscar ticker o empresa..." oninput="filterSP500()" />
+      <select class="sector-select" id="sp500-sector" onchange="filterSP500()">
+        <option value="">Todos los sectores</option>
+      </select>
+      <button class="tab" id="btn-gainers" onclick="sortSP500('gainers')" style="font-size:11px;padding:6px 12px;">▲ Top gainers</button>
+      <button class="tab" id="btn-losers" onclick="sortSP500('losers')" style="font-size:11px;padding:6px 12px;">▼ Top losers</button>
+    </div>
+  </div>
+  <div class="table-card">
+    <div class="table-wrap">
+      <div id="sp500-table"><div class="loading">Cargando S&amp;P 500... (puede tardar ~30 seg)</div></div>
+    </div>
+  </div>
+
+</div><!-- /app -->
+
+<script>
+const API = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+  ? 'http://localhost:3000'
+  : '/api';
+let sp500Data = [];
+let sp500Sort = 'default';
+let charts = {};
+
+// ── Helpers ──────────────────────────────
+
+function fmt(n) {
+  if (n === null || n === undefined) return '—';
+  if (n >= 1e9) return 'ARS ' + (n/1e9).toFixed(1) + 'B';
+  if (n >= 1e6) return 'ARS ' + (n/1e6).toFixed(1) + 'M';
+  return 'ARS ' + n.toLocaleString('es-AR');
+}
+
+function pct(n) {
+  if (n === null || n === undefined) return '—';
+  const sign = n >= 0 ? '+' : '';
+  return sign + n.toFixed(2) + '%';
+}
+
+function pnlClass(n) { return n >= 0 ? 'pnl-pos' : 'pnl-neg'; }
+
+function signalHtml(sig, label) {
+  const key = sig || 'default';
+  const l = label || sig || '—';
+  return `<span class="signal sig-${key}">${l}</span>`;
+}
+
+function scoreHtml(score) {
+  if (score === null || score === undefined) return '—';
+  const c = score >= 75 ? '#1D9E75' : score >= 55 ? '#BA7517' : '#A32D2D';
+  return `<div class="score-wrap"><div class="score-bar"><div class="score-fill" style="width:${score}%;background:${c}"></div></div><span class="score-num">${Math.round(score)}</span></div>`;
+}
+
+function showError(msg) {
+  const el = document.getElementById('error-box');
+  el.textContent = '⚠ ' + msg;
+  el.classList.remove('hidden');
+}
+
+function hideError() { document.getElementById('error-box').classList.add('hidden'); }
+
+function showTab(id, btn) {
+  ['cedears','bonos','acciones','on'].forEach(t => {
+    document.getElementById('tab-'+t).classList.add('hidden');
+  });
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('tab-'+id).classList.remove('hidden');
+  btn.classList.add('active');
+}
+
+// ── Charts ──────────────────────────────
+
+function initChart(id, type, data, options = {}) {
+  if (charts[id]) charts[id].destroy();
+  const ctx = document.getElementById(id);
+  if (!ctx) return;
+  charts[id] = new Chart(ctx, { type, data, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, ...options } });
+}
+
+function renderCharts(summary) {
+  const s = summary.sections;
+  const total = summary.grand_total_ars;
+
+  // Distribución
+  initChart('chart-dist', 'doughnut', {
+    labels: ['CEDEARs', 'Bonos', 'Acciones ARG', 'ON'],
+    datasets: [{ data: [
+      s.cedears.total_ars, s.bonos.total_ars, s.acciones_arg.total_ars, s.on.total_ars
+    ], backgroundColor: ['#378ADD','#1D9E75','#EF9F27','#D4537E'], borderWidth: 0 }]
+  });
+
+  // Scores
+  const allAssets = [...(s.cedears.assets||[]), ...(s.acciones_arg.assets||[])];
+  const labels = allAssets.map(a => a.ticker);
+  const scores = allAssets.map(a => a.signal?.score ?? 50);
+  const colors = scores.map(sc => sc >= 75 ? '#1D9E75' : sc >= 55 ? '#BA7517' : '#A32D2D');
+  initChart('chart-scores', 'bar', {
+    labels,
+    datasets: [{ data: scores, backgroundColor: colors, borderRadius: 3, borderWidth: 0 }]
+  }, {
+    scales: {
+      y: { min: 0, max: 100, grid: { color: 'rgba(0,0,0,0.04)' }, ticks: { font: { size: 10 } } },
+      x: { grid: { display: false }, ticks: { font: { size: 9 }, maxRotation: 0 } }
+    }
+  });
+
+  // Sectores CEDEARs
+  const sectorMap = {};
+  (s.cedears.assets||[]).forEach(a => {
+    const sec = a.sector || 'Otro';
+    sectorMap[sec] = (sectorMap[sec] || 0) + a.total_ars;
+  });
+  const secLabels = Object.keys(sectorMap);
+  const secData = secLabels.map(k => sectorMap[k]);
+  const palette = ['#378ADD','#1D9E75','#EF9F27','#D4537E','#7F77DD','#5DCAA5','#D85A30','#888780'];
+  initChart('chart-sectors', 'doughnut', {
+    labels: secLabels,
+    datasets: [{ data: secData, backgroundColor: palette.slice(0, secLabels.length), borderWidth: 0 }]
+  });
+}
+
+// ── FX ──────────────────────────────────
+
+async function loadFX() {
+  try {
+    const r = await fetch(`${API}/fx`);
+    const fx = await r.json();
+    const strip = document.getElementById('fx-strip');
+    strip.innerHTML = '';
+    const types = { oficial: 'Oficial', blue: 'Blue', mep: 'MEP', ccl: 'CCL' };
+    for (const [key, label] of Object.entries(types)) {
+      if (fx[key]) {
+        const v = fx[key].venta || '—';
+        strip.innerHTML += `<span class="fx-pill">${label} <b>$${v?.toLocaleString('es-AR')}</b></span>`;
+      }
+    }
+  } catch(e) {
+    document.getElementById('fx-strip').innerHTML = '<span class="fx-pill" style="color:var(--red)">FX no disponible</span>';
+  }
+}
+
+// ── Portfolio ────────────────────────────
+
+async function loadPortfolio() {
+  try {
+    const r = await fetch(`${API}/portfolio/summary`);
+    if (!r.ok) throw new Error('Error del servidor: ' + r.status);
+    const data = await r.json();
+    hideError();
+
+    const s = data.sections;
+    const total = data.grand_total_ars;
+
+    // Metrics
+    document.getElementById('m-total').textContent = fmt(total);
+    document.getElementById('m-cedears').textContent = fmt(s.cedears.total_ars);
+    document.getElementById('m-cedears-pct').textContent = Math.round(s.cedears.total_ars/total*100) + '% del portfolio';
+    document.getElementById('m-bonos').textContent = fmt(s.bonos.total_ars);
+    document.getElementById('m-bonos-pct').textContent = Math.round(s.bonos.total_ars/total*100) + '% del portfolio';
+    document.getElementById('m-acc').textContent = fmt(s.acciones_arg.total_ars);
+    document.getElementById('m-acc-pct').textContent = Math.round(s.acciones_arg.total_ars/total*100) + '% del portfolio';
+
+    const allAssets = [...(s.cedears.assets||[]), ...(s.acciones_arg.assets||[])];
+    const buys = allAssets.filter(a => ['comprar','compra_fuerte'].includes(a.signal?.signal)).length;
+    document.getElementById('m-buys').textContent = buys;
+    document.getElementById('m-buys-sub').textContent = `de ${allAssets.length} activos`;
+
+    document.getElementById('updated-at').textContent = 'Actualizado: ' + new Date(data.updated_at).toLocaleString('es-AR');
+
+    // Render charts
+    renderCharts(data);
+
+    // ── CEDEARs table ──
+    const cTab = document.getElementById('tab-cedears');
+    cTab.innerHTML = `<table>
+      <thead><tr>
+        <th>Activo</th><th>Sector</th><th>Cant.</th><th>Precio USD</th><th>Precio ARS</th><th>Total ARS</th><th>PnL</th><th>RSI</th><th>MACD</th><th>Señal</th><th>Score</th>
+      </tr></thead>
+      <tbody>${(s.cedears.assets||[]).map(a => `<tr>
+        <td class="ticker-cell"><div class="t">${a.ticker}</div></td>
+        <td><span class="badge">${a.sector}</span></td>
+        <td>${a.qty}</td>
+        <td>$${a.price_usd?.toLocaleString('en-US', {minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+        <td>ARS ${a.price_ars?.toLocaleString('es-AR')}</td>
+        <td style="font-weight:600;">${fmt(a.total_ars)}</td>
+        <td class="${pnlClass(a.pnl_pct)}">${pct(a.pnl_pct)}</td>
+        <td style="color:${a.rsi>70?'var(--red)':a.rsi<40?'var(--green)':'var(--amber)';font-weight:500}">${a.rsi}</td>
+        <td><span class="badge" style="color:${a.macd_trend==='alcista'?'var(--green)':'var(--red)'}">${a.macd_trend||'—'}</span></td>
+        <td>${signalHtml(a.signal?.signal, a.signal?.signal_label)}</td>
+        <td>${scoreHtml(a.signal?.score)}</td>
+      </tr>`).join('')}</tbody>
+    </table>`;
+
+    // ── Bonos table ──
+    const bTab = document.getElementById('tab-bonos');
+    bTab.innerHTML = `<table>
+      <thead><tr>
+        <th>Bono</th><th>Tipo</th><th>Cant.</th><th>Precio promedio</th><th>Total</th><th>Vencimiento</th><th>TIR est.</th><th>Señal</th>
+      </tr></thead>
+      <tbody>${(s.bonos.assets||[]).map(b => `<tr>
+        <td class="ticker-cell"><div class="t">${b.ticker}</div><div class="n">${b.name}</div></td>
+        <td><span class="badge">${b.tipo}</span></td>
+        <td>${b.qty?.toLocaleString('es-AR')}</td>
+        <td>${b.avg_price?.toLocaleString('es-AR')}</td>
+        <td style="font-weight:600;">${b.total?.toLocaleString('es-AR', {style:'currency',currency:'ARS',maximumFractionDigits:0})}</td>
+        <td>${b.vto}</td>
+        <td style="color:var(--green);font-weight:500;">${b.ytm_pct != null ? b.ytm_pct+'%' : '—'}</td>
+        <td>${signalHtml(b.signal, b.signal)}</td>
+      </tr>`).join('')}</tbody>
+    </table>`;
+
+    // ── Acciones ARG table ──
+    const aTab = document.getElementById('tab-acciones');
+    aTab.innerHTML = `<table>
+      <thead><tr>
+        <th>Activo</th><th>Sector</th><th>Cant.</th><th>Precio</th><th>Total ARS</th><th>PnL</th><th>RSI</th><th>Señal</th><th>Score</th>
+      </tr></thead>
+      <tbody>${(s.acciones_arg.assets||[]).map(a => `<tr>
+        <td class="ticker-cell"><div class="t">${a.ticker}</div><div class="n">${a.name}</div></td>
+        <td><span class="badge">${a.sector}</span></td>
+        <td>${a.qty}</td>
+        <td>ARS ${a.price?.toLocaleString('es-AR')}</td>
+        <td style="font-weight:600;">${fmt(a.total_ars)}</td>
+        <td class="${pnlClass(a.pnl_pct)}">${pct(a.pnl_pct)}</td>
+        <td style="color:${a.rsi>70?'var(--red)':a.rsi<40?'var(--green)':'var(--amber)';font-weight:500}">${a.rsi}</td>
+        <td>${signalHtml(a.signal?.signal, a.signal?.signal_label)}</td>
+        <td>${scoreHtml(a.signal?.score)}</td>
+      </tr>`).join('')}</tbody>
+    </table>`;
+
+    // ── ON table ──
+    const onTab = document.getElementById('tab-on');
+    onTab.innerHTML = `<table>
+      <thead><tr>
+        <th>ON</th><th>Cupón</th><th>Cant.</th><th>Precio promedio</th><th>Total</th><th>Vencimiento</th><th>Señal</th>
+      </tr></thead>
+      <tbody>${(s.on.assets||[]).map(o => `<tr>
+        <td class="ticker-cell"><div class="t">${o.ticker}</div><div class="n">${o.name}</div></td>
+        <td>${o.cupon}</td>
+        <td>${o.qty}</td>
+        <td>ARS ${o.avg_price?.toLocaleString('es-AR')}</td>
+        <td style="font-weight:600;">ARS ${(o.qty*o.avg_price).toLocaleString('es-AR')}</td>
+        <td>${o.vto}</td>
+        <td>${signalHtml('mantener','Mantener')}</td>
+      </tr>`).join('')}</tbody>
+    </table>`;
+
+  } catch(e) {
+    showError('No se pudo conectar con el backend. En local verificá que esté corriendo en localhost:3000. Error: ' + e.message);
+    console.error(e);
+  }
+}
+
+// ── S&P 500 ──────────────────────────────
+
+async function loadSP500() {
+  try {
+    const r = await fetch(`${API}/sp500`);
+    if (!r.ok) throw new Error(r.status);
+    const data = await r.json();
+    sp500Data = data.data || [];
+
+    // Sector select
+    const sectors = [...new Set(sp500Data.map(d => d.sector).filter(Boolean))].sort();
+    const sel = document.getElementById('sp500-sector');
+    sectors.forEach(s => {
+      const opt = document.createElement('option');
+      opt.value = s; opt.textContent = s;
+      sel.appendChild(opt);
+    });
+
+    renderSP500Table(sp500Data);
+  } catch(e) {
+    document.getElementById('sp500-table').innerHTML = `<div class="loading" style="color:var(--red)">Error cargando S&P 500: ${e.message}</div>`;
+  }
+}
+
+function renderSP500Table(data) {
+  const el = document.getElementById('sp500-table');
+  if (!data.length) { el.innerHTML = '<div class="loading">Sin datos</div>'; return; }
+  el.innerHTML = `<table>
+    <thead><tr>
+      <th>Ticker</th><th>Empresa</th><th>Sector</th><th>Precio</th><th>Var. 1d</th>
+    </tr></thead>
+    <tbody>${data.slice(0,200).map(d => `<tr>
+      <td style="font-weight:600;">${d.ticker}</td>
+      <td style="color:var(--text2);font-size:12px;">${d.name}</td>
+      <td><span class="badge">${d.sector}</span></td>
+      <td>$${d.price?.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+      <td class="${pnlClass(d.change_1d_pct)}">${pct(d.change_1d_pct)}</td>
+    </tr>`).join('')}</tbody>
+  </table>`;
+}
+
+function filterSP500() {
+  const q = document.getElementById('sp500-search').value.toLowerCase();
+  const sec = document.getElementById('sp500-sector').value;
+  let filtered = sp500Data.filter(d => {
+    const matchQ = !q || d.ticker.toLowerCase().includes(q) || d.name.toLowerCase().includes(q);
+    const matchSec = !sec || d.sector === sec;
+    return matchQ && matchSec;
+  });
+  if (sp500Sort === 'gainers') filtered.sort((a,b) => b.change_1d_pct - a.change_1d_pct);
+  if (sp500Sort === 'losers') filtered.sort((a,b) => a.change_1d_pct - b.change_1d_pct);
+  renderSP500Table(filtered);
+}
+
+function sortSP500(order) {
+  sp500Sort = sp500Sort === order ? 'default' : order;
+  document.getElementById('btn-gainers').classList.toggle('active', sp500Sort === 'gainers');
+  document.getElementById('btn-losers').classList.toggle('active', sp500Sort === 'losers');
+  filterSP500();
+}
+
+async function loadAll() {
+  await loadFX();
+  await loadPortfolio();
+  await loadSP500();
+}
+
+loadAll();
+</script>
+</body>
+</html>
