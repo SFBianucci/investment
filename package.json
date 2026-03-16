@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "Portfolio tracker con análisis cuantitativo — Node.js + Express",
   "type": "module",
-  "main": "src/server.js",
+  "main": "src/app.js",
   "scripts": {
     "start": "node src/server.js",
     "dev": "nodemon src/server.js"
