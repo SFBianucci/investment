@@ -38,6 +38,18 @@ export function createApp(options = {}) {
     })
   })
 
+  app.get('/health', (_req, res) => {
+    res.json({
+      ok: true,
+      service: 'portfolio-tracker',
+      runtime: process.version,
+      vercel: process.env.VERCEL === '1',
+      commit: process.env.VERCEL_GIT_COMMIT_SHA || null,
+      branch: process.env.VERCEL_GIT_COMMIT_REF || null,
+      ts: new Date().toISOString(),
+    })
+  })
+
   app.get('/fx', async (_req, res) => {
     try {
       const data = await getFX()
