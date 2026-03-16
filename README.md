@@ -6,7 +6,7 @@ API REST para tracking de inversiones con análisis cuantitativo en tiempo real.
 
 - **Runtime**: Node.js 18+
 - **Framework**: Express 4
-- **Datos**: yahoo-finance2 (Yahoo Finance unofficial API)
+- **Datos**: Yahoo Finance public endpoints (fetch nativo)
 - **FX**: dolarapi.com (dólar oficial, blue, MEP, CCL)
 
 ## Instalación rápida
@@ -38,7 +38,7 @@ portfolio-tracker/
 ├── src/
 │   ├── server.js      ← Entry point, rutas Express
 │   ├── portfolio.js   ← Config del portfolio + valorización
-│   ├── yahoo.js       ← Wrapper yahoo-finance2
+│   ├── yahoo.js       ← Wrapper Yahoo Finance (fetch)
 │   ├── indicators.js  ← RSI, MACD, Bollinger, Scoring
 │   ├── sp500.js       ← S&P 500 lista + quotes en batch
 │   ├── fx.js          ← Cotizaciones dólar ARG

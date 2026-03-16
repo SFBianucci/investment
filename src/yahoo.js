@@ -1,13 +1,60 @@
 /**
  * yahoo.js
- * Wrapper sobre yahoo-finance2 para obtener histórico y fundamentales.
+ * Wrapper sobre endpoints publicos de Yahoo Finance via fetch.
  */
 
-import yahooFinanceModule from 'yahoo-finance2'
 import { cache } from './cache.js'
 import { calcRSI, calcMACD, calcBollinger, calcSMACross, calcATR, calcVolatility, computeSignalScore } from './indicators.js'
 
-const yahooFinance = yahooFinanceModule?.default ?? yahooFinanceModule
+function mapPeriodToRange(period) {
+  if (period === '6mo') return '6mo'
+  if (period === '3mo') return '3mo'
+  if (period === '1mo') return '1mo'
+  return '1y'
+}
+
+async function fetchChart(ticker, period) {
+  const range = mapPeriodToRange(period)
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?range=${range}&interval=1d&events=div%2Csplits`
+  const res = await fetch(url, { signal: AbortSignal.timeout(10000) })
+  if (!res.ok) throw new Error(`Yahoo chart HTTP ${res.status}`)
+  const json = await res.json()
+  const result = json?.chart?.result?.[0]
+  if (!result) return null
+
+  const timestamps = result.timestamp || []
+  const quote = result?.indicators?.quote?.[0] || {}
+  const closes = quote.close || []
+  const highs = quote.high || []
+  const lows = quote.low || []
+
+  const rows = []
+  for (let i = 0; i < timestamps.length; i++) {
+    const close = closes[i]
+    const high = highs[i]
+    const low = lows[i]
+    if (close == null || high == null || low == null) continue
+    rows.push({
+      date: new Date(timestamps[i] * 1000),
+      close: Number(close),
+      high: Number(high),
+      low: Number(low),
+    })
+  }
+
+  return {
+    historical: rows,
+    meta: result.meta || {},
+  }
+}
+
+async function fetchQuote(ticker) {
+  const url = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${encodeURIComponent(ticker)}`
+  const res = await fetch(url, { signal: AbortSignal.timeout(10000) })
+  if (!res.ok) throw new Error(`Yahoo quote HTTP ${res.status}`)
+  const json = await res.json()
+  return json?.quoteResponse?.result?.[0] || null
+}
 
 /**
  * Analiza un ticker completo: técnico + fundamental + señal.
@@ -18,17 +65,8 @@ export async function analyzeTicker(ticker, period = '1y') {
   if (cached) return cached
 
   try {
-    // Histórico OHLCV
-    const endDate = new Date()
-    const startDate = new Date()
-    startDate.setFullYear(startDate.getFullYear() - (period === '6mo' ? 0 : 1))
-    if (period === '6mo') startDate.setMonth(startDate.getMonth() - 6)
-
-    const historical = await yahooFinance.historical(ticker, {
-      period1: startDate,
-      period2: endDate,
-      interval: '1d',
-    })
+    const chartData = await fetchChart(ticker, period)
+    const historical = chartData?.historical || []
 
     if (!historical || historical.length < 30) {
       return { error: `Sin datos suficientes para ${ticker}`, ticker }
@@ -50,36 +88,35 @@ export async function analyzeTicker(ticker, period = '1y') {
     const atr   = calcATR(highs, lows, closes)
     const vol30 = calcVolatility(closes)
 
-    // Fundamentales vía quote
+    // Fundamentales basicos via quote
     let fundamentals = {}
     try {
-      const quote = await yahooFinance.quoteSummary(ticker, {
-        modules: ['summaryDetail', 'defaultKeyStatistics', 'financialData', 'price'],
-      })
+      const quote = await fetchQuote(ticker)
+      if (quote) {
+        const analystTarget = quote.targetMeanPrice ?? null
+        const pe = quote.trailingPE ?? quote.forwardPE ?? null
 
-      const fd = quote.financialData || {}
-      const sd = quote.summaryDetail || {}
-      const ks = quote.defaultKeyStatistics || {}
-      const pr = quote.price || {}
-
-      fundamentals = {
-        pe_ratio:            sd.trailingPE     ?? ks.forwardPE ?? null,
-        eps:                 ks.trailingEps    ?? null,
-        revenue_growth_pct:  fd.revenueGrowth  ? parseFloat((fd.revenueGrowth * 100).toFixed(2))  : null,
-        profit_margin_pct:   fd.profitMargins  ? parseFloat((fd.profitMargins  * 100).toFixed(2))  : null,
-        dividend_yield_pct:  sd.dividendYield  ? parseFloat((sd.dividendYield  * 100).toFixed(2))  : null,
-        beta:                sd.beta           ?? null,
-        market_cap_bn:       pr.marketCap      ? parseFloat((pr.marketCap / 1e9).toFixed(1))       : null,
-        analyst_target:      fd.targetMeanPrice ?? null,
-        analyst_rec:         fd.recommendationKey?.toUpperCase() ?? null,
-        upside_pct:          fd.targetMeanPrice
-          ? parseFloat(((fd.targetMeanPrice / currentPrice - 1) * 100).toFixed(1))
-          : null,
-        sector:   pr.sector   ?? quote.summaryProfile?.sector   ?? '',
-        industry: pr.industry ?? quote.summaryProfile?.industry ?? '',
+        fundamentals = {
+          pe_ratio: pe,
+          eps: quote.epsTrailingTwelveMonths ?? null,
+          revenue_growth_pct: null,
+          profit_margin_pct: null,
+          dividend_yield_pct: quote.trailingAnnualDividendYield
+            ? parseFloat((quote.trailingAnnualDividendYield * 100).toFixed(2))
+            : null,
+          beta: quote.beta ?? null,
+          market_cap_bn: quote.marketCap ? parseFloat((quote.marketCap / 1e9).toFixed(1)) : null,
+          analyst_target: analystTarget,
+          analyst_rec: null,
+          upside_pct: analystTarget
+            ? parseFloat(((analystTarget / currentPrice - 1) * 100).toFixed(1))
+            : null,
+          sector: quote.sector || '',
+          industry: quote.industry || '',
+        }
       }
     } catch (_) {
-      // fundamentales opcionales — continuar sin ellos
+      // fundamentales opcionales - continuar sin ellos
     }
 
     // Score compuesto

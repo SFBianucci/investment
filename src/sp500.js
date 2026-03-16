@@ -1,13 +1,10 @@
 /**
  * sp500.js
  * Lista del S&P 500 con precios y agrupación por sector.
- * Usa yahoo-finance2 para batch quotes.
+ * Usa endpoints publicos de Yahoo para quotes en batch.
  */
 
-import yahooFinanceModule from 'yahoo-finance2'
 import { cache } from './cache.js'
-
-const yahooFinance = yahooFinanceModule?.default ?? yahooFinanceModule
 
 // ── Lista estática del S&P 500 con sectores ──────────────────────
 // Fuente: Wikipedia S&P 500 components (actualizada periódicamente)
@@ -57,26 +54,40 @@ export async function getSP500List() {
   if (cached) return cached
 
   const components = await fetchSP500Components()
-  const tickers = components.map(c => c.ticker)
+  const tickers = components
+    .map(c => c.ticker)
+    .filter(t => typeof t === 'string' && /^[A-Z0-9.-]+$/.test(t))
+  const componentMap = new Map(components.map(c => [c.ticker, c]))
 
-  // Yahoo Finance acepta batches de hasta 1500 tickers en spark
   const quotes = []
-  const BATCH = 100
+  const BATCH = 15
   for (let i = 0; i < tickers.length; i += BATCH) {
     const batch = tickers.slice(i, i + BATCH)
     try {
-      const results = await yahooFinance.quote(batch, {}, { validateResult: false })
-      const arr = Array.isArray(results) ? results : [results]
+      const url = `https://query1.finance.yahoo.com/v7/finance/spark?symbols=${encodeURIComponent(batch.join(','))}&range=1d&interval=1d`
+      const res = await fetch(url, { signal: AbortSignal.timeout(10000) })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const json = await res.json()
+      const arr = json?.spark?.result || []
+
       for (const q of arr) {
-        if (!q || !q.symbol) continue
-        const comp = components.find(c => c.ticker === q.symbol)
+        const symbol = q?.symbol
+        if (!symbol) continue
+        const meta = q?.response?.[0]?.meta || {}
+        const closes = q?.response?.[0]?.close || []
+        const validCloses = closes.filter(v => v != null)
+        const last = validCloses.length ? validCloses[validCloses.length - 1] : null
+        const prev = validCloses.length > 1 ? validCloses[validCloses.length - 2] : last
+        const changePct = last && prev ? ((last / prev) - 1) * 100 : 0
+
+        const comp = componentMap.get(symbol) || componentMap.get(symbol.replace('.', '-'))
         quotes.push({
-          ticker:         q.symbol,
-          name:           comp?.name || q.shortName || q.longName || q.symbol,
-          sector:         comp?.sector || q.sector || 'Unknown',
-          price:          parseFloat((q.regularMarketPrice ?? 0).toFixed(2)),
-          change_1d_pct:  parseFloat((q.regularMarketChangePercent ?? 0).toFixed(2)),
-          market_cap_bn:  q.marketCap ? parseFloat((q.marketCap / 1e9).toFixed(1)) : null,
+          ticker: symbol,
+          name: comp?.name || meta.shortName || meta.symbol || symbol,
+          sector: comp?.sector || 'Unknown',
+          price: last != null ? parseFloat(Number(last).toFixed(2)) : 0,
+          change_1d_pct: parseFloat(Number(changePct).toFixed(2)),
+          market_cap_bn: null,
         })
       }
     } catch (err) {
