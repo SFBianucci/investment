@@ -3,13 +3,11 @@
  * Wrapper sobre yahoo-finance2 para obtener histórico y fundamentales.
  */
 
-import yahooFinance from 'yahoo-finance2'
+import yahooFinanceModule from 'yahoo-finance2'
 import { cache } from './cache.js'
 import { calcRSI, calcMACD, calcBollinger, calcSMACross, calcATR, calcVolatility, computeSignalScore } from './indicators.js'
 
-if (typeof yahooFinance?.setGlobalConfig === 'function') {
-  yahooFinance.setGlobalConfig({ validation: { logErrors: false } })
-}
+const yahooFinance = yahooFinanceModule?.default ?? yahooFinanceModule
 
 /**
  * Analiza un ticker completo: técnico + fundamental + señal.

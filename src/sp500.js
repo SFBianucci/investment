@@ -4,8 +4,10 @@
  * Usa yahoo-finance2 para batch quotes.
  */
 
-import yahooFinance from 'yahoo-finance2'
+import yahooFinanceModule from 'yahoo-finance2'
 import { cache } from './cache.js'
+
+const yahooFinance = yahooFinanceModule?.default ?? yahooFinanceModule
 
 // ── Lista estática del S&P 500 con sectores ──────────────────────
 // Fuente: Wikipedia S&P 500 components (actualizada periódicamente)
