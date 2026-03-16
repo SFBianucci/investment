@@ -30,6 +30,14 @@ const __dirname = path.dirname(__filename)
 
 app.use(cors())
 app.use(express.json())
+
+// Permite que la misma app funcione tanto en local (/fx) como en Vercel (/api/fx)
+app.use((req, _res, next) => {
+  if (req.url === '/api') req.url = '/'
+  else if (req.url.startsWith('/api/')) req.url = req.url.slice(4)
+  next()
+})
+
 app.use(express.static(path.resolve(__dirname, '../frontend')))
 
 // ── Health ──────────────────────────────────────────────────────
